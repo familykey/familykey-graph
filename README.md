@@ -1,173 +1,160 @@
 # FamilyKey Graph
 
-FamilyKey 项目的 The Graph Subgraph - 用于索引和查询 DeadManSwitch（死人开关）模块的区块链数据。
+<div align="center">
+
+**FamilyKey 项目的 The Graph 子图**
+
+[![The Graph](https://img.shields.io/badge/The%20Graph-Subgraph-6f2bf6.svg)](https://thegraph.com/)
+[![GraphQL](https://img.shields.io/badge/GraphQL-API-E10098.svg)](https://graphql.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E=18.0-43853d.svg)](https://nodejs.org/)
+[![Matchstick](https://img.shields.io/badge/Testing-Matchstick--AS-ffb400.svg)](https://github.com/LimeChain/matchstick)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
+
+</div>
+
+---
+
+> **语言：** 中文 | [English](README.en.md)
+
+---
 
 ## 📖 项目简介
 
-本项目是一个基于 The Graph 协议的 Subgraph，用于索引以太坊上 DeadManSwitch 模块的智能合约事件。通过本 Subgraph，前端应用可以使用 GraphQL 快速查询合约状态、历史事件和相关数据，而无需直接与区块链交互。
+FamilyKey Graph 是 FamilyKey 资产继承方案的链上数据索引层，基于 The Graph 协议实时同步 DeadManSwitch 模块的事件与状态。借助 Subgraph，前端与服务端可以通过 GraphQL 快速查询继承流程的关键信息，而无需直接扫描区块链日志或维护自建索引服务。该子图聚焦 Safe 模块与 EOA 方案共享的核心数据，帮助产品在不同网络上保持一致的数据体验。
 
-## ✨ 功能特性
+## ✨ 功能亮点
 
-- 🔍 **实时索引**：自动索引所有 DeadManSwitch 相关事件
-- 📊 **GraphQL API**：提供强大的 GraphQL 查询接口
-- 🔄 **状态追踪**：追踪所有签到、索赔开始、取消和完成事件
-- 📈 **历史记录**：完整的事件历史记录和时间戳
-- ⚡ **高性能查询**：通过 The Graph 网络实现快速数据检索
+- 🔍 **实时索引**：自动监听心跳签到、继承发起、取消与完成等关键事件。
+- 📊 **可观测性增强**：保留完整历史记录，支持时间线追踪与数据分析。
+- ⚡ **GraphQL API**：统一的 schema，支持条件过滤、排序和分页查询。
+- 🧱 **模块化结构**：实体模型清晰，可扩展更多继承策略或外部合约。
+- 🛡️ **数据一致性**：在处理程序中复刻合约状态机，确保链上与链下视图保持同步。
 
-## 🏗️ 数据模型
+## 🧱 数据模型
 
 ### 核心实体
 
-#### DeadManSwitch（死人开关）
-- `id`: 合约地址
-- `safe`: Safe 钱包地址
-- `beneficiary`: 受益人地址
-- `heartbeatInterval`: 心跳间隔时间
-- `challengePeriod`: 挑战期时长
-- `lastCheckIn`: 最后签到时间
-- `claimReadyAt`: 索赔就绪时间
-- `currentOwner`: 当前所有者
-- `isClaimActive`: 索赔是否激活
-- `createdAt/updatedAt`: 创建和更新时间
+| 实体 | 关键字段 | 说明 |
+| --- | --- | --- |
+| `DeadManSwitch` | `safe`, `beneficiary`, `heartbeatInterval`, `challengePeriod`, `lastCheckIn`, `claimReadyAt`, `currentOwner`, `isClaimActive`, `createdAt`, `updatedAt` | 表示单个继承配置的最新状态与元数据 |
+| `CheckInEvent` | `deadManSwitch`, `timestamp`, `blockNumber`, `txHash` | 记录每次心跳签到，用于监控活跃状态 |
+| `ClaimStartedEvent` | `deadManSwitch`, `claimReadyAt`, `timestamp`, `blockNumber`, `txHash` | 记录继承发起时间及挑战期就绪时间 |
+| `ClaimCancelledEvent` | `deadManSwitch`, `timestamp`, `blockNumber`, `txHash` | 表示继承流程被撤回或取消 |
+| `ClaimFinalizedEvent` | `deadManSwitch`, `oldOwner`, `newOwner`, `timestamp`, `blockNumber`, `txHash` | 表示继承流程完成并更新所有权 |
 
-#### 事件实体
-- **CheckInEvent**: 签到事件
-- **ClaimStartedEvent**: 索赔开始事件
-- **ClaimCancelledEvent**: 索赔取消事件
-- **ClaimFinalizedEvent**: 索赔完成事件
+### 数据流
 
-## 🚀 快速开始
+```mermaid
+flowchart LR
+    Contract[DeadManSwitch Module] -- emits --> EventStream[(Chain Logs)]
+    EventStream --> MappingHandlers[Mapping Handlers]
+    MappingHandlers --> Entities[(Graph Node Entities)]
+    Entities --> GraphQLAPI[GraphQL API]
+    GraphQLAPI --> Clients[FamilyKey dApp & Services]
+```
 
-### 前置要求
+## 🚀 快速上手
 
-- Node.js >= 16
+### 环境要求
+
+- Node.js 18 或更高版本
 - npm 或 yarn
-- Graph CLI
+- Graph CLI（可选但推荐）：`npm install -g @graphprotocol/graph-cli`
 
-### 安装依赖
+### 安装与配置
 
-```bash
-npm install
-```
+1. 安装依赖：
 
-### 配置
+   ```bash
+   npm install
+   ```
 
-1. 修改 `subgraph.yaml` 中的合约地址和起始块：
+2. 更新 `subgraph.yaml`，填入部署网络、合约地址与起始区块：
 
-```yaml
-dataSources:
-  - kind: ethereum
-    name: DeadManSwitchModule
-    network: mainnet  # 或其他网络如 sepolia, goerli 等
-    source:
-      address: "YOUR_CONTRACT_ADDRESS"
-      startBlock: YOUR_START_BLOCK
-```
+   ```yaml
+   dataSources:
+     - kind: ethereum
+       name: DeadManSwitchModule
+       network: mainnet      # 或 sepolia、goerli 等测试网络
+       source:
+         address: "0x..."
+         startBlock: 12345678
+   ```
 
-2. 确保 ABI 文件路径正确：
+3. 确认 ABI 路径指向正确的合约编译输出：
 
-```yaml
-abis:
-  - name: DeadManSwitchModule
-    file: ../contracts/out/DeadManSwitchModule.sol/DeadManSwitchModule.json
-```
+   ```yaml
+   abis:
+     - name: DeadManSwitchModule
+       file: ../contracts/out/DeadManSwitchModule.sol/DeadManSwitchModule.json
+   ```
 
-### 生成代码
+### 常用脚本
 
-```bash
-npm run codegen
-```
+| 命令 | 说明 |
+| --- | --- |
+| `npm run codegen` | 根据 `schema.graphql` 与 `subgraph.yaml` 生成 AssemblyScript 类型 |
+| `npm run build` | 编译 Schema 与映射，输出部署工件 |
+| `npm run deploy` | 部署到 The Graph Studio（需提前 `graph auth`） |
+| `npm run create-local` | 在本地 Graph Node 上注册子图 |
+| `npm run deploy-local` | 将子图部署到本地节点（需本地 IPFS 与 Graph Node） |
+| `npm run remove-local` | 从本地节点移除子图 |
 
-此命令会根据 `schema.graphql` 和 `subgraph.yaml` 生成 TypeScript 类型定义。
+## 🌐 部署
 
-### 构建
+### The Graph Studio
 
-```bash
-npm run build
-```
+1. 在 [The Graph Studio](https://thegraph.com/studio/) 创建项目并复制 Subgraph Slug。
+2. 通过命令行完成身份认证：
 
-## 📦 部署
+   ```bash
+   graph auth --studio <DEPLOY_KEY>
+   ```
 
-### 部署到 The Graph Studio
+3. 构建并部署：
 
-1. 在 [The Graph Studio](https://thegraph.com/studio/) 创建一个新的 Subgraph
+   ```bash
+   npm run build
+   npm run deploy
+   ```
 
-2. 获取你的部署密钥并认证：
+### 本地 Graph Node
 
-```bash
-graph auth --studio <DEPLOY_KEY>
-```
+1. 启动 Graph Node、IPFS 与 Postgres（可使用官方 Docker Compose）。
+2. 注册并部署子图：
 
-3. 部署 Subgraph：
+   ```bash
+   npm run create-local
+   npm run deploy-local
+   ```
 
-```bash
-npm run deploy
-```
+3. 清理测试环境：
 
-### 本地开发部署
+   ```bash
+   npm run remove-local
+   ```
 
-1. 启动本地 Graph Node（需要 Docker）
+## 🔎 常用查询
 
-2. 创建本地 Subgraph：
-
-```bash
-npm run create-local
-```
-
-3. 部署到本地节点：
-
-```bash
-npm run deploy-local
-```
-
-4. 删除本地 Subgraph：
-
-```bash
-npm run remove-local
-```
-
-## 🔍 GraphQL 查询示例
-
-### 查询所有 DeadManSwitch
+<details>
+<summary>📦 查询指定 Safe 的最新 DeadManSwitch 状态</summary>
 
 ```graphql
 {
-  deadManSwitches {
+  deadManSwitch(id: "0xSAFE_ADDRESS") {
     id
     safe
     beneficiary
-    heartbeatInterval
-    challengePeriod
     lastCheckIn
     claimReadyAt
-    currentOwner
     isClaimActive
-    createdAt
-    updatedAt
   }
 }
 ```
+</details>
 
-### 查询特定地址的 DeadManSwitch
-
-```graphql
-{
-  deadManSwitch(id: "0x...") {
-    id
-    safe
-    beneficiary
-    lastCheckIn
-    isClaimActive
-    checkIns(first: 10, orderBy: timestamp, orderDirection: desc) {
-      timestamp
-      blockNumber
-      txHash
-    }
-  }
-}
-```
-
-### 查询最近的签到事件
+<details>
+<summary>🕒 获取最近的心跳签到事件</summary>
 
 ```graphql
 {
@@ -183,8 +170,10 @@ npm run remove-local
   }
 }
 ```
+</details>
 
-### 查询激活的索赔
+<details>
+<summary>⏳ 列出仍在挑战期内的继承流程</summary>
 
 ```graphql
 {
@@ -199,8 +188,10 @@ npm run remove-local
   }
 }
 ```
+</details>
 
-### 查询索赔历史
+<details>
+<summary>✅ 查询最近完成的继承</summary>
 
 ```graphql
 {
@@ -217,75 +208,72 @@ npm run remove-local
   }
 }
 ```
+</details>
 
-## 🛠️ 开发指南
+## 🛠️ 开发与扩展
 
-### 项目结构
+项目结构概览：
 
-```
+```text
 .
-├── schema.graphql          # GraphQL 数据模型定义
-├── subgraph.yaml          # Subgraph 配置文件
+├── schema.graphql          # GraphQL 实体定义
+├── subgraph.yaml           # 数据源与事件处理配置
 ├── src/
-│   └── mapping.ts         # 事件处理逻辑
-├── package.json           # 项目依赖和脚本
-└── tsconfig.json          # TypeScript 配置
+│   └── mapping.ts          # 事件映射处理逻辑
+├── package.json            # 依赖与脚本
+└── tsconfig.json           # TypeScript 配置
 ```
 
-### 修改数据模型
+扩展步骤建议：
 
-1. 编辑 `schema.graphql` 文件
-2. 运行 `npm run codegen` 重新生成类型
-3. 更新 `src/mapping.ts` 中的处理逻辑
-4. 重新构建和部署
-
-### 添加新的事件处理器
-
-1. 在 `subgraph.yaml` 的 `eventHandlers` 部分添加新事件
-2. 在 `src/mapping.ts` 中实现相应的处理函数
-3. 运行 `npm run codegen` 和 `npm run build`
+1. 在 `schema.graphql` 中新增或调整实体。
+2. 执行 `npm run codegen` 生成新的类型定义。
+3. 在 `src/mapping.ts` 中实现或更新对应的 handler。
+4. 运行 `npm run build`，确保编译与类型检查通过。
+5. 根据需要重新部署到目标环境。
 
 ## 🧪 测试
 
-本项目使用 Matchstick 进行单元测试：
+本项目使用 Matchstick 进行子图单元测试：
 
 ```bash
-# 安装测试依赖
 npm install --save-dev matchstick-as
+```
 
-# 运行测试
+```bash
 npm test
 ```
+
+测试时可通过 `MATCHSTICK_VERBOSE=true npm test` 获取更详细的调试日志。
 
 ## 📚 相关资源
 
 - [The Graph 官方文档](https://thegraph.com/docs/)
-- [AssemblyScript 文档](https://www.assemblyscript.org/)
 - [Graph CLI 文档](https://github.com/graphprotocol/graph-tooling/tree/main/packages/cli)
-- [FamilyKey 项目主仓库](https://github.com/yourusername/familykey)
+- [AssemblyScript 文档](https://www.assemblyscript.org/)
+- [Matchstick 测试指南](https://thegraph.com/docs/en/developer/matchstick/)
 
-## 🤝 贡献
+## 🤝 贡献指南
 
-欢迎提交 Issue 和 Pull Request！
+- 欢迎提交 Issue 或 PR，描述清晰问题、预期行为与复现方式。
+- 提交前请运行 `npm run build` 与相关测试，确保子图能够成功编译。
+- 更新数据模型或 handler 时，同步完善文档与测试用例。
 
 ## 📄 许可证
 
-MIT License
+本项目基于 [MIT](./LICENSE) 许可发布。
 
-## 🔗 相关链接
+## 🔗 关键链接
 
-- **The Graph Studio**: https://thegraph.com/studio/
-- **Graph Explorer**: https://thegraph.com/explorer/
-- **项目仓库**: https://github.com/yourusername/familykey
+- [The Graph Studio](https://thegraph.com/studio/)
+- [Graph Explorer](https://thegraph.com/explorer/)
 
-## ⚠️ 注意事项
+> ⚠️ 在部署到生产网络前，请确认合约地址、起始区块与 ABI 完整一致，并准备备用索引节点以避免同步中断。
 
-1. 部署前请确保合约地址和起始块号正确
-2. ABI 文件路径需要指向正确的合约编译输出
-3. 网络配置需要与实际部署的链匹配
-4. 首次部署后可能需要等待几分钟进行同步
+<div align="center">
 
+**Built with 💙 to keep inheritance data accessible**
 
----
+[⬆ 回到顶部](#familykey-graph)
 
-**由 FamilyKey 团队维护** 💙
+</div>
